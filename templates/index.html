@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Starlink Usage</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root{--bg:#F7F7F8;--card:#FFFFFF;--muted:#6B7280;--accent:#0B5FFF;--accent-600:#0A4ED1}
+        /* dark mode removed - keep theme simple */
+        html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial}
+        body{background:var(--bg);color:#0b1220;display:flex;align-items:center;justify-content:center;padding:20px}
+        .wrap{width:100%;max-width:980px}
+        .card{background:var(--card);border-radius:12px;box-shadow:0 14px 40px rgba(11,17,30,.07);padding:18px;transition:box-shadow .12s ease}
+        .header{display:flex;align-items:center;gap:14px}
+        .logo{width:48px;height:48px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent-600));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px}
+        h1{font-size:18px;margin:0}
+        p.lead{margin:6px 0 0;color:var(--muted);font-size:13px}
+        .meta{margin-top:14px;color:var(--muted);font-size:12px}
+        .controls{display:flex;gap:10px;margin-top:12px;align-items:center}
+        .btn{flex:1;padding:10px 12px;border-radius:10px;border:0;font-weight:700;cursor:pointer;transition:transform .08s ease,box-shadow .08s ease}
+        .btn:active{transform:scale(.997)}
+        .btn-primary{background:linear-gradient(90deg,var(--accent),var(--accent-600));color:#fff}
+        .btn-ghost{background:transparent;border:1px solid #E6E9EE;color:#0b1220}
+        .btn[disabled]{opacity:.6;cursor:default}
+        .hidden{display:none}
+        .loader{display:inline-flex;align-items:center;gap:10px;color:var(--muted);margin-top:18px}
+        .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);animation:blink 1s infinite}
+        @keyframes blink{0%{opacity:.2}50%{opacity:1}100%{opacity:.2}}
+        .results{margin-top:18px;max-height:460px;overflow:auto;border-radius:8px}
+        .table-wrap{background:#FBFCFD;border-radius:8px;padding:6px;border:1px solid #F1F3F5}
+        table{width:100%;border-collapse:collapse;font-size:13px}
+        th,td{padding:8px 10px;text-align:left}
+        thead th{color:var(--muted);font-weight:700;font-size:12px;border-bottom:1px solid #EFF2F4}
+        tbody tr{border-bottom:1px solid #F6F7F8}
+        tbody tr:hover{background:linear-gradient(90deg,rgba(11,95,255,.03),transparent);transform:translateY(-1px)}
+        .small{font-size:12px;color:var(--muted)}
+        .tools{display:flex;gap:8px;align-items:center}
+        .search{padding:8px;border-radius:10px;border:1px solid #E6E9EE;background:#fff;width:240px}
+        .summary{margin-left:auto;font-size:13px;color:var(--muted)}
+        .sortable{cursor:pointer;user-select:none}
+        .sort-indicator{font-size:11px;margin-left:6px;color:var(--muted)}
+        @media (max-width:620px){.controls{flex-direction:column}.search{width:100%}.summary{margin-left:0}}
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <div class="card">
+        <div class="header">
+            <div class="logo">SL</div>
+            <div>
+                <h1>Starlink Usage Scraper</h1>
+                <p class="lead">Quickly fetch daily usage history and export as CSV.</p>
+            </div>
+            <!-- removed dark mode toggle -->
+        </div>
+
+        <p class="meta">Settings are read from the server environment. This UI is minimalist — behavior unchanged.</p>
+
+        <div class="controls">
+            <div class="tools">
+                <input id="search" class="search" placeholder="Filter by date or value (e.g. 2026-05)" aria-label="Filter results">
+                <div class="summary" id="summary">0 rows • 0.00 GB total</div>
+            </div>
+            <div style="display:flex;gap:10px;">
+                <a id="dl" href="/download" class="btn btn-ghost hidden" role="button" aria-disabled="true">Server CSV</a>
+                <button id="previewBtn" class="btn btn-ghost hidden" style="min-width:100px">Preview CSV</button>
+                <button id="exportBtn" class="btn btn-ghost hidden" style="min-width:100px">Export CSV</button>
+                <button id="copyBtn" class="btn btn-ghost hidden" style="min-width:100px">Copy CSV</button>
+                <button id="btn" class="btn btn-primary">Start Scraper →</button>
+            </div>
+        </div>
+
+        <div id="loader" class="loader hidden" role="status" aria-live="polite">
+            <span class="dot" aria-hidden></span>
+            <span id="loaderText">Fetching history...</span>
+        </div>
+
+        <div id="results" class="results hidden">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+                <canvas id="spark" width="220" height="44" aria-hidden="true" style="border-radius:6px;background:transparent"></canvas>
+                <div style="font-size:13px;color:var(--muted)">Usage sparkline</div>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-key="Date">Date <span class="sort-indicator" id="sDate">↕</span></th>
+                            <th class="sortable" data-key="Data Usage (GB)">Data Usage (GB) <span class="sort-indicator" id="sUsage">↕</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody"></tbody>
+                </table>
+            </div>
+        </div>
+        <pre id="csvPreview" class="hidden" style="white-space:pre-wrap;margin-top:12px;padding:12px;border-radius:8px;background:var(--card);color:inherit;border:1px solid #E6EDF8;overflow:auto;max-height:220px"></pre>
+        <p class="small">Tip: Use the filter box to find dates, click column headers to sort.</p>
+    </div>
+</div>
+
+<script>
+    const btn = document.getElementById('btn');
+    const loader = document.getElementById('loader');
+    const results = document.getElementById('results');
+    const tbody = document.getElementById('tbody');
+    const dl = document.getElementById('dl');
+
+    // Client-side state
+    let fullData = [];
+    let currentSort = { key: null, dir: 1 };
+
+    function renderTable(data){
+        tbody.innerHTML = '';
+        let total = 0;
+        data.forEach(item => {
+            const tr = document.createElement('tr');
+            const d = document.createElement('td'); d.textContent = item.Date || '';
+            const usageVal = parseFloat(item['Data Usage (GB)']) || 0;
+            const v = document.createElement('td'); v.textContent = usageVal.toFixed(2) + ' GB';
+            tr.appendChild(d); tr.appendChild(v);
+            tbody.appendChild(tr);
+            total += usageVal;
+        });
+        document.getElementById('summary').textContent = `${data.length} rows • ${total.toFixed(2)} GB total`;
+    }
+
+    function applyFilterAndSort(){
+        const q = document.getElementById('search').value.trim().toLowerCase();
+        let data = fullData.slice();
+        if(q){
+            data = data.filter(it => (it.Date||'').toLowerCase().includes(q) || (String(it['Data Usage (GB)'])||'').toLowerCase().includes(q));
+        }
+        if(currentSort.key){
+            data.sort((a,b)=>{
+                const ka = a[currentSort.key];
+                const kb = b[currentSort.key];
+                if(currentSort.key === 'Data Usage (GB)'){
+                    return (parseFloat(ka)||0 - (parseFloat(kb)||0)) * currentSort.dir;
+                }
+                return String(ka||'').localeCompare(String(kb||'')) * currentSort.dir;
+            });
+        }
+        renderTable(data);
+        drawSpark(data);
+        return data;
+    }
+
+    document.getElementById('search').addEventListener('input', () => applyFilterAndSort());
+
+
+
+    // CSV generation and preview/export
+    function buildCSV(data){
+        const rows = [['Date','Data Usage (GB)']];
+        data.forEach(r=> rows.push([r.Date || '', r['Data Usage (GB)'] || '']));
+        return rows.map(r => r.map(c => '"' + String(c).replace(/"/g,'""') + '"').join(',')).join('\n');
+    }
+
+    function downloadBlob(filename, text){
+        const blob = new Blob([text], {type: 'text/csv;charset=utf-8;'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+    }
+
+    const previewBtn = document.getElementById('previewBtn');
+    const exportBtn = document.getElementById('exportBtn');
+    const csvPreview = document.getElementById('csvPreview');
+    const copyBtn = document.getElementById('copyBtn');
+
+    previewBtn.addEventListener('click', ()=>{
+        const data = applyFilterAndSort();
+        const csv = buildCSV(data);
+        csvPreview.textContent = csv;
+        csvPreview.classList.toggle('hidden');
+    });
+
+    exportBtn.addEventListener('click', ()=>{
+        const data = applyFilterAndSort();
+        const csv = buildCSV(data);
+        downloadBlob('starlink_usage_filtered.csv', csv);
+    });
+
+    copyBtn.addEventListener('click', async ()=>{
+        const data = applyFilterAndSort();
+        const csv = buildCSV(data);
+        try{
+            await navigator.clipboard.writeText(csv);
+            copyBtn.textContent = 'Copied ✓';
+            setTimeout(()=> copyBtn.textContent = 'Copy CSV', 1600);
+        }catch(e){
+            alert('Clipboard failed: ' + e);
+        }
+    });
+
+    // Sparkline drawing
+    const spark = document.getElementById('spark');
+    const sctx = spark.getContext('2d');
+    function drawSpark(data){
+        sctx.clearRect(0,0,spark.width,spark.height);
+        if(!data || data.length===0) return;
+        const vals = data.map(d=>parseFloat(d['Data Usage (GB)']) || 0);
+        const max = Math.max(...vals); const min = Math.min(...vals);
+        const pad = 6; const w = spark.width; const h = spark.height;
+        sctx.beginPath();
+        vals.forEach((v,i)=>{
+            const x = pad + (i/(vals.length-1 || 1))*(w - pad*2);
+            const y = h - pad - ((v - min) / (max - min || 1))*(h - pad*2);
+            if(i===0) sctx.moveTo(x,y); else sctx.lineTo(x,y);
+        });
+        sctx.strokeStyle = 'rgba(11,95,255,0.95)'; sctx.lineWidth = 2; sctx.stroke();
+        // fill under curve
+        sctx.lineTo(w-pad, h-pad); sctx.lineTo(pad, h-pad); sctx.closePath();
+        const g = sctx.createLinearGradient(0,0,0,h); g.addColorStop(0,'rgba(11,95,255,0.18)'); g.addColorStop(1,'rgba(11,95,255,0.02)');
+        sctx.fillStyle = g; sctx.fill();
+    }
+
+
+    // Sorting handlers
+    document.querySelectorAll('th.sortable').forEach(h => {
+        h.addEventListener('click', ()=>{
+            const key = h.getAttribute('data-key');
+            if(currentSort.key === key) currentSort.dir *= -1; else { currentSort.key = key; currentSort.dir = -1; }
+            // update indicators
+            document.getElementById('sDate').textContent = currentSort.key==='Date' ? (currentSort.dir===-1? '↓':'↑') : '↕';
+            document.getElementById('sUsage').textContent = currentSort.key==='Data Usage (GB)' ? (currentSort.dir===-1? '↓':'↑') : '↕';
+            applyFilterAndSort();
+        });
+    });
+
+    btn.addEventListener('click', () => {
+        btn.disabled = true;
+        loader.classList.remove('hidden');
+        results.classList.add('hidden');
+        dl.classList.add('hidden');
+        document.getElementById('loaderText').textContent = 'Fetching history...';
+
+        fetch('/scrape').then(r => r.json()).then(res => {
+            loader.classList.add('hidden');
+            if(res && res.status === 'success'){
+                fullData = res.data || [];
+                // default: show newest first
+                currentSort.key = 'Date'; currentSort.dir = -1;
+                const visible = applyFilterAndSort();
+                results.classList.remove('hidden');
+                dl.classList.remove('hidden');
+                previewBtn.classList.remove('hidden');
+                exportBtn.classList.remove('hidden');
+                copyBtn.classList.remove('hidden');
+                dl.setAttribute('aria-disabled','false');
+                previewBtn.setAttribute('aria-disabled','false');
+                exportBtn.setAttribute('aria-disabled','false');
+                copyBtn.setAttribute('aria-disabled','false');
+                // quick highlight effect
+                document.querySelector('.card').style.boxShadow = '0 18px 48px rgba(11,17,30,.12)';
+                setTimeout(()=> document.querySelector('.card').style.boxShadow = '', 400);
+            } else {
+                alert('Error: ' + (res && res.message ? res.message : 'Unknown'));
+            }
+            btn.disabled = false;
+        }).catch(err => {
+            loader.classList.add('hidden');
+            btn.disabled = false;
+            alert('Server error: ' + err);
+        });
+    });
+</script>
+</body>
+</html>
